@@ -60,3 +60,26 @@
 **Changed:** nothing in code. Verified: `vendor/official` has no upstream commits past f8f2629; SUBMISSION.md says the form URL is "shared by email to all registered participants".
 **Broke:** the form also needs a public repo URL and a technical document. There is no git repo or GitHub remote yet, so an early fallback upload is blocked on those too.
 **Next:** Fadel watches the registration inbox and creates the public GitHub repo (his outward-facing action). Claude prepares a data-free repo and a stub report so both are ready when the email arrives.
+
+## 2026-11-09 — Repo, CV harness, approach #4, match pipeline, repro gate
+
+**Changed:**
+- git repo + **private** GitHub repo `hot-head305/the-observers-possession` (flip to public before submitting). `vendor/official` is a submodule pinned at f8f2629. `tools/check_repo.py` + `make check-repo` refuse data-like files. `README.md`.
+- `possession/harness.py`: match × 9 cells × 5 seeds × 3 bridges, seed-averaged; paired match bootstrap; Holm; promotion rule §2e 1–3; registry with git SHA and a dirty flag.
+- `possession/features.py`, `possession/candidates.py` (Baseline, Rules #4), `experiments/run_cv.py`, `make cv`.
+- `possession/degrade.py`: IDSSE freezes the ball on 100 % of dead frames, which leaks the label. Fixed with `dead_ball_path` (roll out, carried by the restart taker, placed for 2 s).
+- `possession/match.py` (ATD reader, per-half predict, published 2nd-half pre-kickoff D), `private/submission.py`, `private/repro.py` (checkout vs fresh clone + venv vs docker linux/amd64), template targets in `docs/PRIVATE.md`, `make submission DATA=...`.
+- `make test` now runs every test (it ran only the firewall tests before). 79 pass, 1 opt-in (`REPRO_IT=1`: fresh-clone rebuild byte-identical on synthetic data, passed).
+
+**Results (external data only):**
+- CV: baseline ±50 0.251, Rules 0.429. Gain +0.177, positive in all 27 cell × bridge combinations; promotes over the baseline.
+- Rules defaults were set on the dev match only (`scratch/dev/quick.py`).
+
+**Broke / caveats:**
+- The dead detector relies on slow ball + slow players. Our stoppage trajectory is a model, so the real-match level is probably lower.
+- Slot fragmentation is still ~25 vs 46.
+- Docker was not running here, so the docker leg is untested.
+- An auto-mode classifier denied writing `.git/hooks/pre-commit`; `make check-repo` runs by hand.
+- The extra-ball-channel branch (hypothesis i) is not built yet.
+
+**Next:** Fadel runs `make private-submission` and `make private-repro` (docs/PRIVATE.md). Claude: #1 HSMM with evidence-dependent switch costs vs #4 (G1, Nov 10), the extra-channel branch, `private-sanity`, and a stub report.

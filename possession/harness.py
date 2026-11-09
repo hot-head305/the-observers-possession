@@ -141,7 +141,8 @@ def _git_sha():
     try:
         run = lambda *a: subprocess.run(["git", "-C", ROOT, *a], capture_output=True, text=True,
                                         check=True).stdout.strip()
-        dirty = run("status", "--porcelain", "--untracked-files=no", "--ignore-submodules=dirty")
+        dirty = run("status", "--porcelain", "--untracked-files=no", "--ignore-submodules=dirty",
+                    "--", ".", ":(exclude)experiments/registry.jsonl")
         return run("rev-parse", "HEAD") + ("-dirty" if dirty else "")
     except Exception:
         return "unknown"
