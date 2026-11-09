@@ -85,3 +85,22 @@ def test_meta_detects_extra_channel(tmp_path, capsys, extra, expect):
         assert "{}  {}".format(expect, h) in out
     detail = json.loads((tmp_path / "o" / "meta.json").read_text())
     assert detail["categorical_fields"] == ([3] if extra else [])
+
+
+def test_submission_rules_on_synthetic_bundle(tmp_path, capsys, monkeypatch):
+    import submission
+    from possession import match
+    monkeypatch.setattr(match.games, "half_video_blocks", lambda game: [(1, 0, 139), (2, 160, 299)])
+    monkeypatch.setattr(match, "KICKOFF_2ND", 170)
+    monkeypatch.setattr(match.predict, "__defaults__", (match.games.GAME, 170))
+    root = make_bundle(tmp_path / "b")
+    for cand in ("rules", "baseline"):
+        out = tmp_path / cand
+        code = submission.main(["--data", str(root), "--out", str(out), "--n-frames", str(N),
+                                "--cand", cand])
+        assert code == 0 and "PASS" in capsys.readouterr().out
+        rows = (out / "The_Observers.csv").read_text().splitlines()
+        assert rows[0] == "frame,label" and len(rows) == N + 1
+        lab = [r.split(",")[1] for r in rows[1:]]
+        assert set(lab[140:160]) == {"X"} and set(lab[160:170]) == {"D"}
+        assert set(lab[:140]) <= {"H", "A", "D"}

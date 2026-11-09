@@ -3,7 +3,8 @@ private_out/
 Makefile.private
 scratch/data/
 scratch/out/
-vendor/
+vendor/*
+!vendor/official
 .venv/
 __pycache__/
 *.pyc
@@ -13,3 +14,4 @@ __pycache__/
 *.npz
 *.csv
 !tests/**/*.csv
+out/

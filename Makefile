@@ -1,11 +1,27 @@
-.PHONY: test firewall-test evidence sensitivity idsse-download idsse-profile idsse-transfer
+.PHONY: test firewall-test cv check-repo submission evidence sensitivity idsse-download idsse-profile idsse-transfer
 
 PY := uv run python -I
 
-test: firewall-test
+test:
+	uv run python -m pytest -q tests
 
 firewall-test:
 	uv run python -m pytest -q tests/test_firewall.py
+
+# CV gate on degraded IDSSE (external data only); appends to experiments/registry.jsonl.
+cv:
+	uv run python experiments/run_cv.py
+
+# Refuse data-like files among tracked files (videos, archives, big CSVs, > 5 MB).
+check-repo:
+	/usr/bin/python3 tools/check_repo.py $$(git ls-files)
+
+# Reproduce the submission from the provided bundle:
+#   make submission DATA=/path/to/unpacked/bundle OUT=out
+OUT ?= out
+submission:
+	@test -n "$(DATA)" || { echo "usage: make submission DATA=/path/to/bundle [OUT=out]"; exit 2; }
+	uv run --frozen python private/submission.py --data "$(DATA)" --out "$(OUT)"
 
 # Public / external / synthetic evidence used by PLAN.md. None of these touch match data.
 evidence: sensitivity idsse-profile idsse-transfer

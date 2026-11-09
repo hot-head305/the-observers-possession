@@ -32,6 +32,9 @@ class Params:
     dup_mean_s: float = 1.0
     pos_noise: float = 0.3        # metres
     ball_noise: float = 0.6
+    dead_ball_motion: bool = True  # IDSSE freezes the ball on every dead frame; real tracking doesn't
+    roll_out_s: float = 1.0
+    placed_s: float = 2.0
 
 
 GRID = [Params(gap_median_s=g, p_dead_hidden=p)
@@ -93,6 +96,44 @@ def _on_runs(rng, T, p):
     return out
 
 
+def dead_ball_path(sec, p):
+    """Replace IDSSE's frozen dead-ball position with a plausible stoppage trajectory.
+
+    The frozen position is taken as the restart spot. Per dead run: the ball first rolls on with
+    the last alive velocity, decaying over roll_out_s; then it follows the player who ends the run
+    nearest the spot (the restart taker, 0.5 m ahead of him); for the last placed_s it lies still
+    on the spot. Deterministic: no rng, so a cell's realism doesn't vary by seed.
+    """
+    ball = sec.ball[:, :2].astype(np.float32).copy()
+    scale = np.array([105.0, 68.0], dtype=np.float32)
+    T = len(ball)
+    for a, b in _runs(sec.label == D):
+        spot = ball[b - 1].copy()
+        L = b - a
+        n_roll = min(L, int(p.roll_out_s * FPS))
+        vel = ball[a - 1] - ball[a - 2] if a >= 2 else np.zeros(2, np.float32)
+        decay = np.exp(-np.arange(1, n_roll + 1) / (0.4 * FPS))[:, None]
+        roll = ball[a - 1] + np.cumsum(vel * decay, axis=0) if a >= 1 else np.repeat(spot[None], n_roll, 0)
+        ball[a:a + n_roll] = roll
+        n_place = min(L - n_roll, int(p.placed_s * FPS))
+        carry = slice(a + n_roll, b - n_place)
+        if carry.stop > carry.start:
+            pl = sec.players[b - 1]
+            ok = ~np.isnan(pl[:, 0])
+            if ok.any():
+                j = int(np.flatnonzero(ok)[np.argmin(np.linalg.norm((pl[ok] - spot) * scale, axis=1))])
+                track = sec.players[carry, j]
+                fill = np.isnan(track[:, 0])
+                track = np.where(fill[:, None], spot, track)
+                ahead = (spot - track) * scale
+                n = np.linalg.norm(ahead, axis=1, keepdims=True)
+                ball[carry] = track + np.where(n > 0.5, 0.5 * ahead / np.maximum(n, 1e-6), ahead) / scale
+            else:
+                ball[carry] = spot
+        ball[b - n_place:b] = spot
+    return ball[:T]
+
+
 def degrade(sec, p, rng):
     T, P, _ = sec.players.shape
     scale = np.array([105.0, 68.0], dtype=np.float32)
@@ -132,7 +173,8 @@ def degrade(sec, p, rng):
         off = rng.normal(0, 0.7, 2) / scale if j < 0 else 0
         slots[s:e, slot] = src + off + rng.normal(0, p.pos_noise, (e - s, 2)) / scale
     hidden = ball_hidden(rng, sec.label, sec.ball[:, 2], p)
-    ball = sec.ball[:, :2] + rng.normal(0, p.ball_noise, (T, 2)).astype(np.float32) / scale
+    base = dead_ball_path(sec, p) if p.dead_ball_motion else sec.ball[:, :2]
+    ball = base + rng.normal(0, p.ball_noise, (T, 2)).astype(np.float32) / scale
     ball[hidden] = np.nan
     return Observed(ball, slots, np.array(slot_team, dtype=np.int8))
 
