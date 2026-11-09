@@ -137,9 +137,12 @@ def promote(cands, incumbent):
 
 
 def _git_sha():
+    """HEAD, suffixed -dirty when tracked files differ from it (the row then isn't reproducible)."""
     try:
-        return subprocess.run(["git", "-C", ROOT, "rev-parse", "HEAD"], capture_output=True,
-                              text=True, check=True).stdout.strip()
+        run = lambda *a: subprocess.run(["git", "-C", ROOT, *a], capture_output=True, text=True,
+                                        check=True).stdout.strip()
+        dirty = run("status", "--porcelain", "--untracked-files=no", "--ignore-submodules=dirty")
+        return run("rev-parse", "HEAD") + ("-dirty" if dirty else "")
     except Exception:
         return "unknown"
 

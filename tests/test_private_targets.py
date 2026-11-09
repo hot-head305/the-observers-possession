@@ -104,3 +104,14 @@ def test_submission_rules_on_synthetic_bundle(tmp_path, capsys, monkeypatch):
         lab = [r.split(",")[1] for r in rows[1:]]
         assert set(lab[140:160]) == {"X"} and set(lab[160:170]) == {"D"}
         assert set(lab[:140]) <= {"H", "A", "D"}
+
+
+@pytest.mark.skipif(not os.environ.get("REPRO_IT"), reason="slow: clones HEAD and builds a venv")
+def test_repro_fresh_clone_on_synthetic_bundle(tmp_path, capsys):
+    import repro
+    root = make_bundle(tmp_path / "b")
+    code = repro.main(["--data", str(root), "--out", str(tmp_path / "o"), "--n-frames", str(N)])
+    out = capsys.readouterr().out
+    detail = json.loads((tmp_path / "o" / "repro.json").read_text())
+    assert "PASS  fresh clone + fresh venv byte-identical" in out, (out, detail)
+    assert code == 0 or "docker" in out
