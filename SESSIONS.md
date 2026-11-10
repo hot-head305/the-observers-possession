@@ -83,3 +83,32 @@
 - The extra-ball-channel branch (hypothesis i) is not built yet.
 
 **Next:** Fadel runs `make private-submission` and `make private-repro` (docs/PRIVATE.md). Claude: #1 HSMM with evidence-dependent switch costs vs #4 (G1, Nov 10), the extra-channel branch, `private-sanity`, and a stub report.
+
+## 2026-11-10 — G1: #1 HMM not promoted; #4 hardened against position noise
+
+**Changed:**
+- `possession/hmm.py` (#1): 3-state Viterbi; naive-Bayes emissions, team-symmetrised so IDSSE home/away habits don't transfer; tie-break that places switches late (a loose ball carries the last team). `ctrl_mode="rules"` variant.
+- `candidates.RulesViterbi`: optimal segmentation on the rule evidence. `candidates.parse_kw`.
+- `harness.evaluate_lomo`. Cells may now be `Params`, for stress tests.
+- `features.smooth_xy`; `Rules.smooth_f` (default 2).
+- `experiments/stress.py` → `scratch/out/stress.txt`; `experiments/smooth_cv.py`.
+- Tests: 81 pass, 1 opt-in.
+
+**Results (external only):**
+- G1 on the dev match J03WPY (cells 0/4/8, 1 seed):
+
+  | candidate | best spellF1 |
+  |---|---|
+  | HMM (binned) | 0.426 |
+  | HMM (rule evidence) | 0.426 |
+  | RulesViterbi | 0.448 |
+  | Rules (greedy) | 0.491 |
+
+  No #1 variant was taken to CV (the Holm budget is kept). #4 stays the incumbent.
+- Stress test: gain over the baseline stays +0.16 to +0.18 under 4× fragmentation, 5 % cross-team fragments, 50 % ball hidden, 15 % dropout and every stoppage-ball variant. Under 2× position noise it falls to +0.076.
+- Smoothing ±2 frames fixes that on CV: +0.016 at 1× noise, +0.134 at 2× (0.297 → 0.431).
+- CV now: Rules 0.446 vs baseline 0.251 (+0.195, min cell +0.152). Registry row @ d03757e.
+
+**Broke:** nothing failing. The `RuntimeWarning` (inf − inf) in `hmm.categories` is harmless. The greedy rules beating the optimal segmentation is unexplained; worth a look if time allows.
+
+**Next:** Fadel re-runs `make private-submission` (new default) and `make private-repro`, with Docker running. Claude: `private-sanity` (gate 5), the extra-ball-channel branch, the report draft, and `private-degrade-profile` so the degradation can be checked against the real ATD noise.
