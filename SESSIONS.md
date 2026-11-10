@@ -132,3 +132,16 @@
 **Broke:** nothing failing. `private-degrade-profile` loads the IDSSE cache, so it only runs where `make idsse-download` has run (Fadel's Mac has it).
 
 **Next:** Fadel runs the Nov 10 section of docs/PRIVATE.md. Nov 13 freeze (pre-register the config hash, then the locked test once). Nov 14: flip the repo to public, then upload the CSV and `docs/REPORT.md` as `The_Observers.md`.
+
+## 2026-11-10 — Freeze and one-shot locked test
+
+**Changed:**
+- `experiments/locked_test.py` + `make freeze` / `make locked-test`.
+  - The frozen candidate is the submission default, `WithChannel(Rules())`.
+  - freeze: once, clean tree; writes a `freeze` row with the config hash.
+  - locked-test: needs a freeze, a clean tree and an unchanged hash. It writes `test_started` before scoring, so even a crash uses up the single run. Then it writes the baseline and candidate `test` rows on J03WQQ/J03WR9.
+- `possession/harness.py`: `append` and `result_row` were split out of `log`; `log` still refuses `test`.
+- `tests/test_locked_test.py`. 86 pass, 1 opt-in.
+
+**Broke:** a relay-protocol slip: Fadel wrote "done all pass" about the Nov 10 private run. No code or design choice uses it. Which CSV to upload stays his call, per docs/PRIVATE.md.
+**Next:** Nov 13: Claude runs `make freeze`, commits, then `make locked-test` once and puts the result in REPORT §5. Nov 14: Fadel flips the repo to public and uploads.

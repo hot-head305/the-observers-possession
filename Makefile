@@ -1,4 +1,4 @@
-.PHONY: test firewall-test cv check-repo submission evidence sensitivity idsse-download idsse-profile idsse-transfer
+.PHONY: test firewall-test cv freeze locked-test check-repo submission evidence sensitivity idsse-download idsse-profile idsse-transfer
 
 PY := uv run python -I
 
@@ -11,6 +11,13 @@ firewall-test:
 # CV gate on degraded IDSSE (external data only); appends to experiments/registry.jsonl.
 cv:
 	uv run python experiments/run_cv.py
+
+# Nov 13: record the submitted config hash, then score it once on the 2 locked IDSSE test matches.
+freeze:
+	uv run python experiments/locked_test.py freeze
+
+locked-test:
+	uv run python experiments/locked_test.py run
 
 # Refuse data-like files among tracked files (videos, archives, big CSVs, > 5 MB).
 check-repo:

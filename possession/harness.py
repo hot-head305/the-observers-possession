@@ -162,13 +162,20 @@ def config_hash(config):
     return hashlib.sha256(json.dumps(config, sort_keys=True).encode()).hexdigest()[:12]
 
 
-def log(result, split, config, extra=None, path=REGISTRY):
-    if split == "test":
-        raise RuntimeError("locked-test lines are written only by make locked-test")
+def append(row, path=REGISTRY):
     os.makedirs(os.path.dirname(path), exist_ok=True)
-    row = {"time": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), "git": _git_sha(),
-           "name": result.name, "split": split, "config": config, "config_hash": config_hash(config),
-           "seeds": SEEDS, "matches": list(result.matches), **result.summary(), **(extra or {})}
+    row = {"time": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), "git": _git_sha(), **row}
     with open(path, "a") as f:
         f.write(json.dumps(row, sort_keys=True) + "\n")
     return row
+
+
+def result_row(result, split, config, extra=None):
+    return {"name": result.name, "split": split, "config": config, "config_hash": config_hash(config),
+            "seeds": SEEDS, "matches": list(result.matches), **result.summary(), **(extra or {})}
+
+
+def log(result, split, config, extra=None, path=REGISTRY):
+    if split == "test":
+        raise RuntimeError("locked-test lines are written only by make locked-test")
+    return append(result_row(result, split, config, extra), path)
