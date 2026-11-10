@@ -112,3 +112,23 @@
 **Broke:** nothing failing. The `RuntimeWarning` (inf − inf) in `hmm.categories` is harmless. The greedy rules beating the optimal segmentation is unexplained; worth a look if time allows.
 
 **Next:** Fadel re-runs `make private-submission` (new default) and `make private-repro`, with Docker running. Claude: `private-sanity` (gate 5), the extra-ball-channel branch, the report draft, and `private-degrade-profile` so the degradation can be checked against the real ATD noise.
+
+## 2026-11-10 — Gate 5, tracking profile, extra-channel branch, report draft
+
+**Changed:**
+- `private/sanity.py` checks, with thresholds fixed in advance:
+  - validates;
+  - X outside the halves;
+  - second-half pre-kickoff block is D;
+  - possessions per alive-minute within 3.5–13.7 (the IDSSE range over every bridge, widened 25 %);
+  - ≥ 50 % of Smart Tagging set-piece starts have a D within ±3 s.
+- `possession/profile.py` + `private/degrade_profile.py`: real versus simulated tracking statistics, PASS/FAIL per statistic. The jitter estimator recovers the injected noise exactly (0.30 / 0.59 m).
+- `candidates.WithChannel`: the hypothesis (i) branch, now the default `rules` candidate. It is a no-op without a categorical ball column. `match.read_atd` keeps the extra ball fields. `Observed.ball_extra`.
+- `docs/PRIVATE.md`: new targets and a Nov 10 run section.
+- `docs/REPORT.md`: technical document draft (the form accepts `.md`).
+- Stress test re-run with smoothing: gain +0.18 to +0.22 in every setting (`scratch/out/stress.txt`).
+- 83 tests pass, 1 opt-in.
+
+**Broke:** nothing failing. `private-degrade-profile` loads the IDSSE cache, so it only runs where `make idsse-download` has run (Fadel's Mac has it).
+
+**Next:** Fadel runs the Nov 10 section of docs/PRIVATE.md. Nov 13 freeze (pre-register the config hash, then the locked test once). Nov 14: flip the repo to public, then upload the CSV and `docs/REPORT.md` as `The_Observers.md`.

@@ -86,7 +86,8 @@ Official scorer, degraded IDSSE. Each score is the mean over 4 CV matches × 9 d
 
 - The gain is positive in every match and every degradation × bridge cell (minimum +0.15).
 - Under harsher tracking (4× fragmentation, 50 % ball hidden, 15 % dropout, 2× position noise,
-  5 % cross-team fragments) the gain stays between +0.13 and +0.18.
+  5 % cross-team fragments, other stoppage-ball behaviour) the gain stays between +0.18 and +0.22.
+  The smallest per-match gain is +0.12 (`experiments/stress.py`).
 - The official baseline scores 0.243 on the real match, inside our band for the baseline
   (0.20–0.28). The absolute level on the real match is still uncertain by several hundredths.
 
