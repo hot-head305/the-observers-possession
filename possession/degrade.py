@@ -46,6 +46,7 @@ class Observed:
     ball: np.ndarray
     slots: np.ndarray
     slot_team: np.ndarray
+    ball_extra: np.ndarray = None  # (T, K) ball fields beyond x, y in the ATD, if any
 
 
 def _runs(mask):

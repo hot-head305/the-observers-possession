@@ -92,7 +92,7 @@ def test_submission_rules_on_synthetic_bundle(tmp_path, capsys, monkeypatch):
     from possession import match
     monkeypatch.setattr(match.games, "half_video_blocks", lambda game: [(1, 0, 139), (2, 160, 299)])
     monkeypatch.setattr(match, "KICKOFF_2ND", 170)
-    monkeypatch.setattr(match.predict, "__defaults__", (match.games.GAME, 170))
+    monkeypatch.setattr(match.predict, "__defaults__", (None, match.games.GAME, 170))
     root = make_bundle(tmp_path / "b")
     for cand in ("rules", "baseline"):
         out = tmp_path / cand
@@ -104,6 +104,27 @@ def test_submission_rules_on_synthetic_bundle(tmp_path, capsys, monkeypatch):
         lab = [r.split(",")[1] for r in rows[1:]]
         assert set(lab[140:160]) == {"X"} and set(lab[160:170]) == {"D"}
         assert set(lab[:140]) <= {"H", "A", "D"}
+
+
+def test_sanity_gate_on_synthetic_file(tmp_path, capsys, monkeypatch):
+    import sanity
+    monkeypatch.setattr(sanity, "KICKOFF_2ND", 170)
+    monkeypatch.setattr(sanity, "RATE_BAND", (0.0, 1e9))
+    import games
+    monkeypatch.setattr(games, "half_video_blocks", lambda game: [(1, 0, 139), (2, 160, 299)])
+    root = make_bundle(tmp_path / "b", kickoff=(100, 250))   # set pieces start at frames 95, 245
+    lab = ["H"] * 90 + ["D"] * 20 + ["A"] * 30 + ["X"] * 20 + ["D"] * 10 + ["H"] * 80 + ["D"] * 10 + ["A"] * 40
+    csv = tmp_path / "c.csv"
+    csv.write_text("frame,label\n" + "".join("{},{}\n".format(i, l) for i, l in enumerate(lab)))
+    code = sanity.main(["--data", str(root), "--out", str(tmp_path / "o"), "--n-frames", str(N),
+                        "--csv", str(csv)])
+    out = capsys.readouterr().out
+    assert code == 0 and out.count("PASS") == 5, out
+    lab[150] = "H"                                            # a spell leaking into halftime
+    csv.write_text("frame,label\n" + "".join("{},{}\n".format(i, l) for i, l in enumerate(lab)))
+    code = sanity.main(["--data", str(root), "--out", str(tmp_path / "o"), "--n-frames", str(N),
+                        "--csv", str(csv)])
+    assert code == 1 and "FAIL  X everywhere outside" in capsys.readouterr().out
 
 
 @pytest.mark.skipif(not os.environ.get("REPRO_IT"), reason="slow: clones HEAD and builds a venv")

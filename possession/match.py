@@ -38,11 +38,23 @@ def _xy(group):
     return float(a), float(b)
 
 
+def _floats(group):
+    out = []
+    for v in group.split(","):
+        try:
+            out.append(float(v))
+        except ValueError:
+            out.append(np.nan)
+    return out
+
+
 def read_atd(raw_path, n_slots, n_frames):
-    """ball (N, 2) and slots (N, S, 2), normalised 0-1 as in the file, NaN where missing.
+    """ball (N, 2) and slots (N, S, 2), normalised 0-1 as in the file, NaN where missing, plus
+    every further ball field (N, K) as numbers (speed, and any extra channel the tracker writes).
     Row i is video frame i (ATD frame ids count from 1, as in the official baseline)."""
     ball = np.full((n_frames, 2), np.nan, np.float32)
     slots = np.full((n_frames, n_slots, 2), np.nan, np.float32)
+    extra = {}
     with open(raw_path) as fh:
         for line in fh:
             parts = line.rstrip("\n").split(":")
@@ -51,19 +63,23 @@ def read_atd(raw_path, n_slots, n_frames):
             i = int(parts[0]) - 1
             if not 0 <= i < n_frames:
                 continue
-            ball[i] = _xy(parts[2])
+            b = _floats(parts[2])
+            ball[i] = b[:2] if len(b) >= 2 else (np.nan, np.nan)
+            for k, v in enumerate(b[2:]):
+                extra.setdefault(k, np.full(n_frames, np.nan, np.float32))[i] = v
             for j, g in enumerate(parts[1].split(";")[:n_slots]):
                 slots[i, j] = _xy(g)
-    return ball, slots
+    ball_extra = np.stack([extra[k] for k in sorted(extra)], 1) if extra else None
+    return ball, slots, ball_extra
 
 
 def load(meta_path, raw_path, n_frames):
     team = slot_teams(meta_path)
-    ball, slots = read_atd(raw_path, len(team), n_frames)
-    return ball, slots, team
+    ball, slots, extra = read_atd(raw_path, len(team), n_frames)
+    return ball, slots, team, extra
 
 
-def predict(cand, ball, slots, team, game=games.GAME, kickoff_2nd=KICKOFF_2ND):
+def predict(cand, ball, slots, team, extra=None, game=games.GAME, kickoff_2nd=KICKOFF_2ND):
     """Codes for every video frame: X outside the half blocks, the candidate inside each half,
     D on the graded pre-kickoff stretch of the second half."""
     out = np.full(len(ball), X, np.int8)
@@ -74,7 +90,8 @@ def predict(cand, ball, slots, team, game=games.GAME, kickoff_2nd=KICKOFF_2ND):
         if half == 2 and a < kickoff_2nd <= b:
             out[a:kickoff_2nd] = D
             a = kickoff_2nd
-        out[a:b] = cand(Observed(ball[a:b], slots[a:b], team))
+        out[a:b] = cand(Observed(ball[a:b], slots[a:b], team,
+                                 None if extra is None else extra[a:b]))
     return out
 
 

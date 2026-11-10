@@ -35,6 +35,12 @@ private-submission:
 private-repro:
 	$(PY) private/repro.py --data $(DATA) --out $(OUT)/repro
 
+private-sanity:
+	$(PY) private/sanity.py --data $(DATA) --out $(OUT)/sanity --csv $(OUT)/submission/The_Observers.csv
+
+private-degrade-profile:
+	$(PY) private/degrade_profile.py --data $(DATA) --out $(OUT)/degrade_profile
+
 private-day1:
 	-$(MAKE) -f Makefile.private private-bundle
 	$(MAKE) -f Makefile.private private-align private-fallback private-meta
@@ -73,3 +79,19 @@ make private-repro
   The first Docker run downloads an image and the dependencies, which takes a few minutes.
 - A failure here is for you to keep: the next Claude task is "make the build deterministic on
   external data", which needs no result from you.
+
+## Run (Nov 10): gate 5 and the tracking profile
+
+```
+cd ~/hack2027
+make private-submission
+make private-sanity
+make private-degrade-profile
+```
+
+- `private-sanity` checks the exact file in `private_out/submission/`. All PASS means approach #4
+  may replace the fallback in the form on Nov 14. Any FAIL: keep the fallback; tell Claude nothing
+  beyond "keep working on external data".
+- `private-degrade-profile` compares the real tracking's ball gaps, fragments and position jitter
+  with our simulation. FAIL lines are expected and need no action now; they become the input for
+  the training side later, read from file by code.

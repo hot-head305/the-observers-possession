@@ -14,13 +14,14 @@ sys.path.insert(0, ROOT)
 from possession import candidates as cd, match  # noqa: E402
 
 TEAM_FILE = "The_Observers.csv"
-CANDIDATES = {"rules": cd.Rules(), "baseline": cd.Baseline(50)}
+CANDIDATES = {"rules": cd.WithChannel(cd.Rules()), "rules_only": cd.Rules(),
+              "baseline": cd.Baseline(50)}
 
 
 def build(data, n_frames, cand):
     p = paths(data)
-    ball, slots, team = match.load(p["atd_meta"], p["atd_raw"], n_frames)
-    return match.predict(CANDIDATES[cand], ball, slots, team)
+    ball, slots, team, extra = match.load(p["atd_meta"], p["atd_raw"], n_frames)
+    return match.predict(CANDIDATES[cand], ball, slots, team, extra)
 
 
 def sha256(path):

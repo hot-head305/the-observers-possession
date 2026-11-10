@@ -113,3 +113,32 @@ def test_smooth_xy_keeps_gaps():
     x[4] = np.nan
     y = smooth_xy(x, 2)
     assert np.isnan(y[4, 0]) and np.allclose(y[0, 0], np.mean([0, 1, 2]))
+
+
+def test_with_channel_maps_owner_flag_and_is_noop_without_one():
+    from possession import candidates as cd
+    from possession.degrade import Observed
+
+    class Noisy:
+        name = "noisy"
+
+        def __call__(self, obs):
+            return base_lab.copy()                       # stand-in base: truth with 20 % noise
+
+    T = 3000
+    truth = np.repeat(np.array([H, A, D, H, A, H], np.int8), T // 6)
+    rng = np.random.default_rng(0)
+    base_lab = truth.copy()
+    flip = rng.random(T) < 0.2
+    base_lab[flip] = rng.integers(0, 3, flip.sum())
+    owner = np.where(truth == H, 1.0, np.where(truth == A, 2.0, 0.0))   # tracker codes 1/2/0
+    speed = rng.random(T) * 10                                          # not categorical
+    extra = np.stack([speed, base_lab.astype(float), owner], 1).astype(np.float32)
+    obs = Observed(np.zeros((T, 2), np.float32), np.zeros((T, 1, 2), np.float32),
+                   np.array([H], np.int8), extra)
+    w = cd.WithChannel(Noisy())
+    assert np.array_equal(w(obs), truth)
+    obs.ball_extra = extra[:, :2]                                      # speed + flickering column
+    assert np.array_equal(w(obs), base_lab)
+    obs.ball_extra = None
+    assert np.array_equal(w(obs), base_lab)

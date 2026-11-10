@@ -165,3 +165,62 @@ def parse_kw(args):
         k, v = a.split("=")
         out[k.strip()] = int(v) if v.strip().isdigit() else float(v)
     return out
+
+
+@dataclass(frozen=True)
+class WithChannel:
+    """Hypothesis (i) branch: if the tracking writes a categorical ball channel (an owner or
+    alive flag), use it. Nobody says what the channel is: a column qualifies by its values alone
+    (<= 3 distinct, changes at most once per 5 s on average, present on >= half the frames), and
+    each value is mapped to H/A/D by where the base candidate's own labels fall on frames with
+    that value. The channel then overrides the base wherever it maps. No qualifying column, or no
+    clear mapping: the base output, unchanged."""
+    base: object
+    max_values: int = 3
+    min_frames_per_change: int = 125
+    min_coverage: float = 0.5
+    min_share: float = 0.6
+
+    @property
+    def name(self):
+        return "channel_" + self.base.name
+
+    def column(self, x):
+        ok = ~np.isnan(x)
+        if ok.mean() < self.min_coverage:
+            return None
+        v = np.round(x[ok], 3)
+        vals = np.unique(v)
+        if not 2 <= len(vals) <= self.max_values:
+            return None
+        changes = np.count_nonzero(v[1:] != v[:-1])
+        if changes and len(v) / changes < self.min_frames_per_change:
+            return None
+        return vals
+
+    def mapping(self, x, vals, lab):
+        m = {}
+        for v in vals:
+            sel = np.round(x, 3) == v
+            share = np.bincount(lab[sel], minlength=3)[:3] / max(1, sel.sum())
+            k = int(np.argmax(share))
+            if share[k] >= self.min_share:
+                m[float(v)] = k
+        return m if len(set(m.values())) >= 2 else None
+
+    def __call__(self, obs):
+        lab = self.base(obs)
+        X = getattr(obs, "ball_extra", None)
+        if X is None:
+            return lab
+        for k in range(X.shape[1]):
+            vals = self.column(X[:, k])
+            m = None if vals is None else self.mapping(X[:, k], vals, lab)
+            if m is None:
+                continue
+            out = lab.copy()
+            xr = np.round(X[:, k], 3)
+            for v, code in m.items():
+                out[xr == v] = code
+            return out
+        return lab
