@@ -93,3 +93,23 @@ def test_rules_hold_possession_through_loose_ball_and_detect_stoppage():
     assert np.mean(lab[620:900] == A) > 0.95
     assert np.mean(lab[1150:1350] == D) > 0.95
     assert np.array_equal(lab, cd.Rules()(obs))   # deterministic
+
+
+def test_viterbi_places_switch_at_first_new_evidence():
+    from possession.hmm import viterbi
+    e = np.zeros((60, 3))
+    e[:20, 0] = 1                      # H evidence, then 20 frames of nothing, then A evidence
+    e[40:, 1] = 1
+    e[:, 2] = -1e6
+    C = np.zeros((3, 3))
+    C[0, 1] = C[1, 0] = 5
+    path = viterbi(e, C)
+    assert np.all(path[:40] == 0) and np.all(path[40:] == 1)   # loose ball carries the last team
+
+
+def test_smooth_xy_keeps_gaps():
+    from possession.features import smooth_xy
+    x = np.arange(10, dtype=np.float32)[:, None]
+    x[4] = np.nan
+    y = smooth_xy(x, 2)
+    assert np.isnan(y[4, 0]) and np.allclose(y[0, 0], np.mean([0, 1, 2]))

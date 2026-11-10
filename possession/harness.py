@@ -79,7 +79,10 @@ def _score_match(args):
     gt = [_assemble([g[b] for g in gts]) for b in range(nb)]
     S = np.zeros((len(cells), nb, 3))
     for ci, cell in enumerate(cells):
-        p = dg.GRID[cell]
+        # A cell is a GRID index, or a Params for stress tests outside the grid.
+        p = cell if isinstance(cell, dg.Params) else dg.GRID[cell]
+        if isinstance(cell, dg.Params):
+            cell = hashlib.sha256(repr(cell).encode()).hexdigest()[:12]
         for seed in seeds:
             pred = _assemble([cand(dg.degrade(s, p, _rng(mid, cell, seed, si)))
                               for si, s in enumerate(secs)])
@@ -100,6 +103,13 @@ def evaluate(cand, matches, cells=range(len(dg.GRID)), seeds=range(SEEDS), name=
             out = list(ex.map(_score_match, jobs))
     S = np.stack(out)
     return Result(name or getattr(cand, "name", repr(cand)), tuple(matches), S[..., 0], S[..., 1], S[..., 2])
+
+
+def evaluate_lomo(factory, matches, name=None, **kw):
+    """Leave-one-match-out: factory(train_matches) -> candidate, scored on the held-out match."""
+    parts = [evaluate(factory(tuple(x for x in matches if x != m)), (m,), **kw) for m in matches]
+    return Result(name or parts[0].name, tuple(matches), *(np.concatenate([getattr(p, k) for p in parts])
+                                                          for k in ("spell", "macro", "n_pred")))
 
 
 def compare(b, a, n=BOOT_N, seed=0):

@@ -27,9 +27,24 @@ def hidden_run_length(hidden):
     return out
 
 
-def frame_features(obs):
-    ball = obs.ball * PITCH
-    slots = obs.slots * PITCH
+def smooth_xy(x, w):
+    """NaN-aware centred mean over +-w frames along axis 0, kept NaN where x is NaN (never
+    fills a gap). Damps per-frame jitter; a no-op on tracking that is already smooth."""
+    if w <= 0:
+        return x
+    ok = ~np.isnan(x)
+    c = np.concatenate([np.zeros((1,) + x.shape[1:]), np.cumsum(np.where(ok, x, 0.0), 0)])
+    n = np.concatenate([np.zeros((1,) + x.shape[1:]), np.cumsum(ok, 0)])
+    i = np.arange(len(x))
+    lo, hi = np.maximum(0, i - w), np.minimum(len(x), i + w + 1)
+    cnt = n[hi] - n[lo]
+    out = ((c[hi] - c[lo]) / np.maximum(cnt, 1)).astype(np.float32)
+    return np.where(ok, out, np.nan)
+
+
+def frame_features(obs, smooth=0):
+    ball = smooth_xy(obs.ball * PITCH, smooth)
+    slots = smooth_xy(obs.slots * PITCH, smooth)
     team = obs.slot_team
     hidden = np.isnan(ball[:, 0])
     d = np.linalg.norm(slots - ball[:, None, :], axis=2)  # NaN where slot empty or ball hidden

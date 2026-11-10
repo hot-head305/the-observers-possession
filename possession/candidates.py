@@ -52,8 +52,11 @@ class Rules:
     hidden_dead_s: float = 4.0  # unseen this long with slow players = stoppage
     min_dead_s: float = 2.0
     fill_alive_s: float = 3.0  # alive blips shorter than this inside a stoppage are dead
+    smooth_f: int = 2          # +-frames of position smoothing before features
     # Defaults chosen on the dev match (J03WPY) by a one-at-a-time sweep plus one combined round
-    # (scratch/dev/quick.py, 2026-11-09); never on CV or test matches.
+    # (scratch/dev/quick.py, 2026-11-09); never on CV or test matches. smooth_f=2 picked on dev
+    # (scratch/dev/quick_smooth.py) as the minimax over 1x/2x position noise, confirmed on CV by
+    # experiments/smooth_cv.py: +0.016 at 1x, +0.134 at 2x (real tracker noise is unknown).
 
     @property
     def name(self):
@@ -83,7 +86,7 @@ class Rules:
         return ev
 
     def __call__(self, obs):
-        f = ft.frame_features(obs)
+        f = ft.frame_features(obs, self.smooth_f)
         dead = self.dead_mask(f)
         ev = self.evidence(f)
         ev[dead] = -1
@@ -127,3 +130,38 @@ class Rules:
             lab[:] = H
         lab[dead] = D
         return lab
+
+
+@dataclass(frozen=True)
+class RulesViterbi(Rules):
+    """#4 with the greedy switch logic replaced by an optimal segmentation: minimise
+    switch_cost per H<->A switch + 1 per evidence frame that disagrees with the label.
+    Stoppages come from the same dead mask; a restart is free (any team may restart)."""
+    switch_cost: float = 10.0
+
+    @property
+    def name(self):
+        return "rulesvit_k{}_".format(self.switch_cost) + super().name
+
+    def __call__(self, obs):
+        from .hmm import viterbi
+        f = ft.frame_features(obs, self.smooth_f)
+        dead = self.dead_mask(f)
+        ev = self.evidence(f)
+        e = np.zeros((len(ev), 3))
+        e[:, H] = ev == H
+        e[:, A] = ev == A
+        e[dead, :2] = -1e6
+        e[~dead, D] = -1e6
+        C = np.zeros((3, 3))
+        C[H, A] = C[A, H] = self.switch_cost
+        return viterbi(e, C)
+
+
+def parse_kw(args):
+    """['switch_cost=6', 'ctrl_r=1.2'] -> {'switch_cost': 6.0, 'ctrl_r': 1.2} (numbers only)."""
+    out = {}
+    for a in args:
+        k, v = a.split("=")
+        out[k.strip()] = int(v) if v.strip().isdigit() else float(v)
+    return out
