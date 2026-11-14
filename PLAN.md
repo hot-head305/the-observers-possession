@@ -264,6 +264,40 @@ After the freeze: only format or index bug fixes. If any gate fails on Nov 13, s
 
 ---
 
+## 6b. Sprint Nov 14 – Nov 17 (v2; replaces the Nov 14–16 rows above)
+
+Decided 2026-11-14 by Fadel: no fallback upload; one final submission of the best version we can build in time. Fadel works full time on it. v1 (`4185e57a0bad`) stays the floor: it ships unless a v2 beats it on the gate below.
+
+**Why there is room (new evidence, match diagnostics now readable).**
+- Real tracking vs our simulated degradation (`private_out/degrade_profile/`): the ball is hidden on the same 41 % of frames, but in **long runs** (median 10.7 s, p90 33.8 s) instead of our 1.4 s / 11.3 s. Fragments are rarer (11.5/min vs 45.6) and positions are smooth (jitter ≈ 0 vs 0.3–0.6 m). v1 was tuned for the wrong failure mode: many short gaps and noise, rather than long ball-less stretches.
+- Public window (format check, not a tuning set; FAQ): v1 0.421 spellF1 / 0.772 macroF1, 22 possessions; baseline_smooth50 0.326. v1 is valid and plausible.
+- Smart Tagging phases carry a team tag and set pieces mark restarts. The FAQ says to use them.
+
+**Workstreams (in order of expected gain per hour).**
+| # | what | who | done when |
+|---|---|---|---|
+| A | Degradation from the real profile: map `degrade_profile.json` onto `Params` (long hidden runs, fewer fragments, no jitter); re-score v1 and the baseline on CV under it | Claude | CV numbers for v1 under the real profile |
+| B | Retune v1's rules on dev under profile A (`switch_k`, `hidden_dead_s`, `smooth_f`, `ctrl_r`) | Claude | best dev config; CV run |
+| C | Ball-hidden possession: when the ball is unseen > 2 s, keep the holder unless the other team shows sustained possession shape (players nearest the last ball position, team centroid moving toward goal) | Claude | candidate on CV |
+| D | Smart Tagging as input: team-tagged phases as a prior during ball-hidden stretches; set pieces as restart anchors. Not validatable on IDSSE, so it ships only if it agrees with v1 where the ball is visible and passes sanity | Claude, Fadel watches the video for definitions | flag-gated candidate |
+| E | Get the organisers' AI-use OK in writing (email) | Fadel | reply saved to `docs/LLM-USE.md` |
+| F | Report v2: approach, the real-profile evidence, two-stage selection disclosure | Claude, Fadel reviews | REPORT final |
+
+Dropped: video ball detection (largest potential, but 2.5 days and a determinism risk).
+
+**Gate for v2 (fixed now, before any v2 result).** CV under the real profile, 4 matches × seeds × bridges: v2 − v1 ≥ +0.010 spellF1 and no CV match negative. Then `private-sanity` all PASS and one public-window score as a format check. Otherwise v1 ships. The locked test was already used on v1; v2 gets a second locked-test run, disclosed as such in the report.
+
+**Timeline.**
+| when | gate |
+|---|---|
+| Sat 14 night | A done |
+| Sun 15 | B, C on CV; D built; E sent |
+| Mon 16 12:00 | **v2 freeze** (gate above), locked test #2, sanity, repro, public check |
+| Mon 16 18:00 | Report final; **Fadel submits** (CSV + repo URL + `The_Observers.md`) |
+| Tue 17 | buffer only; deadline |
+
+---
+
 ## 7. Reproducibility and release
 
 - `uv` with Python 3.11 pinned, `uv.lock` committed; numpy/pandas/kloppy/lightgbm pinned exactly.
