@@ -1,0 +1,9 @@
+{
+ "ball_noise": 0.0,
+ "gap_median_s": 8.0,
+ "p_air": 0.0,
+ "p_dead_hidden": 0.5,
+ "player_off_mean_s": 5.0,
+ "player_off_share": 0.07,
+ "pos_noise": 0.0
+}
