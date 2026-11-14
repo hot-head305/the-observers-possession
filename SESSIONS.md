@@ -145,3 +145,12 @@
 
 **Broke:** a relay-protocol slip: Fadel wrote "done all pass" about the Nov 10 private run. No code or design choice uses it. Which CSV to upload stays his call, per docs/PRIVATE.md.
 **Next:** Nov 13: Claude runs `make freeze`, commits, then `make locked-test` once and puts the result in REPORT §5. Nov 14: Fadel flips the repo to public and uploads.
+
+## 2026-11-14 — Freeze + one-shot locked test
+
+**Changed:**
+- `make freeze`: `freeze` row in `experiments/registry.jsonl`, config hash `4185e57a0bad` (`WithChannel(Rules())`), commit 5a66ca0.
+- `make locked-test` (ran once, on J03WQQ/J03WR9): baseline 0.259 spellF1 / 0.616 macroF1; ours 0.442 / 0.809. Gain +0.183, p 0.0, minimum cell gain +0.153, no sign flip. Per match 0.447 / 0.438.
+- `docs/REPORT.md` §5: locked-test result added.
+**Broke:** nothing. 86 pass, 1 opt-in. No typecheck configured. The freeze ran a day late (scheduled for Nov 13); no output-changing work happened in between.
+**Next:** Fadel: `make private-repro` with Docker running; flip the GitHub repo to public; upload the CSV and `docs/REPORT.md` as `The_Observers.md` (deadline Nov 17). After the freeze, only format or index fixes.

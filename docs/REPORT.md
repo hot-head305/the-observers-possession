@@ -85,6 +85,10 @@ Official scorer, degraded IDSSE. Each score is the mean over 4 CV matches × 9 d
 | **ours** | **0.446** | 0.80 |
 
 - The gain is positive in every match and every degradation × bridge cell (minimum +0.15).
+- Locked test, run once after the freeze (config hash `4185e57a0bad`) on the 2 held-out IDSSE
+  matches, same grid: baseline 0.259 / 0.616, ours **0.442** / 0.809. Gain +0.183, positive in
+  every cell (minimum +0.15); per match 0.447 and 0.438. It matches the CV level, so the
+  parameter choices did not overfit the CV and dev matches.
 - Under harsher tracking (4× fragmentation, 50 % ball hidden, 15 % dropout, 2× position noise,
   5 % cross-team fragments, other stoppage-ball behaviour) the gain stays between +0.18 and +0.22.
   The smallest per-match gain is +0.12 (`experiments/stress.py`).
