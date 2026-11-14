@@ -5,6 +5,9 @@ forward position and forward velocity of each team's centroid, and the width and
 each team. A logistic regression on IDSSE (bridged labels, alive frames) gives P(H has the ball).
 Deterministic: IRLS with a fixed number of steps, no randomness.
 """
+import json
+import os
+
 import numpy as np
 
 from .features import FPS, PITCH, box_mean
@@ -69,3 +72,9 @@ def predict(params, X):
     mu, sd, w = p[:N_FEAT], p[N_FEAT:2 * N_FEAT], p[2 * N_FEAT:]
     z = w[0] + ((X - mu) / sd) @ w[1:]
     return 1 / (1 + np.exp(-z))
+
+
+def shipped():
+    """Weights fitted by experiments/shape_fit_final.py (IDSSE CV + dev matches only)."""
+    with open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "shape_weights.json")) as f:
+        return tuple(json.load(f)["weights"])

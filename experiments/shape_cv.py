@@ -13,7 +13,7 @@ from possession import candidates as cd, harness as hs  # noqa: E402
 from profile_cv import CELLS  # noqa: E402
 from shape_train import train  # noqa: E402
 
-THR, MIN_S = 0.6, 0.5  # chosen on dev (J03WPY)
+THR, MIN_S = 0.6, 3.0  # chosen on dev (J03WPY), under the fitted profile and the old grid
 
 
 def factory(mids):

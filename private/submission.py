@@ -11,11 +11,14 @@ import sys
 from _common import ROOT, parser, paths, report
 
 sys.path.insert(0, ROOT)
-from possession import candidates as cd, match  # noqa: E402
+from possession import candidates as cd, match, shape  # noqa: E402
 
 TEAM_FILE = "The_Observers.csv"
 CANDIDATES = {"rules": cd.WithChannel(cd.Rules()), "rules_only": cd.Rules(),
-              "baseline": cd.Baseline(50)}
+              "baseline": cd.Baseline(50),
+              # v2 (PLAN.md §6b, C): thr/min_s chosen on dev, see experiments/shape_cv.py
+              "shape": cd.WithChannel(cd.RulesShape(shape_w=shape.shipped(), shape_thr=0.6,
+                                                    shape_min_s=3.0))}
 
 
 def build(data, n_frames, cand):
