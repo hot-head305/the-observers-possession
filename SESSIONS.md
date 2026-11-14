@@ -169,3 +169,31 @@
 
 **Broke:** nothing. 86 pass, 1 opt-in. No typecheck configured.
 **Next:** Fadel uploads `private_out/submission/The_Observers.csv` (SHA above) and `docs/REPORT.md` as `The_Observers.md` before 2026-11-17.
+
+## 2026-11-14 — Sprint v2: fitted degradation (A), retune (B), team-shape evidence (C)
+
+**Changed:**
+- `PLAN.md` §6b: Nov 14–17 sprint, v2 gate fixed in advance (707d4b3).
+- A, `experiments/fit_profile.py` → `experiments/profile_params.json`:
+  - the degradation is fitted to the real tracking profile (gap median 8 s, no aerial hide, no position noise);
+  - `experiments/profile_cv.py`: CV baseline 0.235 (real match 0.243), v1 0.394.
+- B, `experiments/profile_dev_sweep.py`: v1's parameters are already near the dev optimum; the best single change is +0.007. Not shipped.
+- C, `possession/shape.py`: ball-free team-shape logistic model (dev AUC 0.893).
+  - `candidates.RulesShape` uses it as evidence inside ball gaps of 3 s or more (thr 0.6).
+  - `candidates.RulesGap` (switch placed inside the gap) was worse; dropped.
+  - `Rules` gained the `features` / `_switch_at` hooks. Its output is unchanged and the config hash is unchanged.
+- v2 = submission candidate `shape`. Weights in `possession/shape_weights.json` (IDSSE CV + dev). `experiments/shape_cv.py`, `experiments/shape_fit_final.py`.
+- `tests/test_shape.py`: 91 pass, 1 opt-in.
+
+**Results:**
+- CV LOMO, fitted profile: v1 0.394 → v2 0.427, gain +0.033, all 4 matches positive, minimum cell +0.010. **§6b gate passes.**
+- Old grid: +0.009 (p_gain_pos 1.0, worst cell −0.005).
+- Real match:
+  - `private-sanity` on v2: 5/5 PASS; 398 spells (v1: 371).
+  - Public window: identical to v1 (0.421).
+  - Repro on v2: fresh venv and docker both PASS, SHA `c0fd9e484873d550ace048a59eea877d8fbfef95a1ebb26da92d5cf276a7e987`.
+
+**Broke:** nothing failing. Spurious `RuntimeWarning` from matmul in `shape.fit` (Accelerate BLAS); the results are finite and deterministic (repro PASS).
+**Next:**
+- Main session / Fadel: decide the v2 freeze. Steps: switch the `submission.py` default to `shape`, `make freeze`, locked test #2 (disclosed as a second use).
+- Then REPORT for v2. D (Smart Tagging) not started.
