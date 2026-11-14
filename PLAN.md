@@ -6,34 +6,20 @@ Evidence lives in `scratch/` (code) and `scratch/out/` (outputs). Every number b
 
 ---
 
-## 0. Data firewall (built, tested, live)
+## 0. Data firewall (Nov 7 – Nov 14; lifted 2026-11-14)
 
-**Rule.** No competition video, data or extract goes to a hosted LLM. The official FAQ/OVERVIEW extend this to "any videos, datasets … provided in connection with the Competition, or any extracts thereof". Claude never reads, lists, greps, loads, decodes or describes anything under `~/mtah-data`, `local_cache/`, `private_out/` or `Makefile.private`.
+**Policy change, 2026-11-14.** Fadel asked the organisers whether an AI assistant may be used on the competition data. Per Fadel, they said yes, and recommended it. The answer is not in writing (`docs/LLM-USE.md`). From 2026-11-14 the firewall below is lifted: Claude may read the match data and run the `make private-*` targets. Fadel disabled the hook by renaming `.claude/settings.json` to `.claude/settings.json.off` (untracked); the tracked copy was removed from the repo the same day.
 
-**Strictest reading, applied (a deviation from the session prompt, see Decision 1).** The repo's `evaluation/gt/*public*` and `evaluation/results/baseline_*.csv` are datasets provided in connection with the competition. Claude deleted them from its local clone (restore with `git -C vendor/official checkout -- evaluation`) and has not read them. So Step 2b (baseline_raw diagnostics, public-window evaluation) is a **human-run private target** here (§5), not something Claude ran. The prose docs (README, DATA, EVALUATION …) were read: they are MIT documentation, and the numbers quoted from them (17 possessions, 14.2 s, the baseline scores, the lag table) are published text.
+**What it changes, and what it does not.**
+- The config was frozen before the change (registry `freeze` row, hash `4185e57a0bad`, `WithChannel(Rules())`) and the locked test ran once before it. No parameter, rule or candidate choice used a match-data result.
+- After the change Claude ran `private-sanity`, `private-repro` and `make submission` on the match data, to verify the upload file. Only format or index fixes are allowed after the freeze (§6), and none were needed.
 
-**Mechanism.**
-- `.claude/settings.json` has a PreToolUse hook on **every** tool (matcher `*`, which also covers MCP file tools like desktop-commander) running `.claude/hooks/firewall.py`, plus `permissions.deny` rules as a second layer.
-- The hook blocks (exit 2, fails closed on any error) when any of these is true:
-  - the input references the forbidden names (normalised: case-folded, with quotes, backslashes, `-` and `_` stripped);
-  - a path resolves (through symlinks) under a forbidden dir;
-  - a glob could match one (checked with fnmatch, whether or not the dir exists);
-  - a recursive or listing command, or a Grep/Glob, would traverse a directory that contains one (`~`, `/`, and the repo root, since the repo root holds `local_cache/`);
-  - a Bash command uses a file whose contents reference the forbidden names, or a `.py` file with a sibling module that does;
-  - the command decodes or evals (`base64 -d`, `eval`, `xxd -r`, `bytes.fromhex` …);
-  - the command is `make private-*`;
-  - a Write/Edit/Bash call would modify `.claude/settings*` or `.claude/hooks/` (tamper guard).
-- Write/Edit **content** may mention the names only in `*.md` and `Makefile.private`, which Claude can never read or run.
-- `tests/test_firewall.py`: 67 tests, all passing (`make test`). They cover `cat`, `head`, `python -c`, kloppy, `ffmpeg`/`ffprobe`, `$HOME` and case and quote variants, globs, symlinks, sibling modules, `cd`-relative paths, operator-glued words, recursive traversal, decoding, private make targets, MCP read tools, the tamper guard and fail-closed. The test file contains none of the literal names.
-- Live check: `echo` of the data dir name is blocked in this session.
+**Rule, Nov 7 – Nov 14.** No competition video, data or extract went to a hosted LLM (official FAQ/OVERVIEW: "any videos, datasets … provided in connection with the Competition, or any extracts thereof"). Claude never read, listed, loaded or described anything under the data directory, `local_cache/`, `private_out/` or `Makefile.private`. Under the strictest reading the official repo's public GT and baseline CSVs counted too: Claude deleted them from its local clone (restore with `git -C vendor/official checkout -- evaluation`) and did not read them. The prose docs (README, DATA, EVALUATION …) were read; the numbers quoted from them are published text.
 
-**Hole found and fixed today.** Words glued to `;` (e.g. `cat X;`) skipped the file-content scan, so one public file containing a forbidden *name* (the official `.gitignore` mentions an organiser folder) was printed. No data was involved, but it was a real gap. Fixed: the tokenizer now splits on shell operators, and the Bash tamper guard was added. The patch went in through `scratch/tools/patch_fw.py` before the tamper guard existed. **Fadel should review `.claude/hooks/firewall.py`** (Decision 9).
-
-**Known limits (documented, not closed).** It is string- and path-based. It cannot stop the following: a program that builds a path at runtime from innocuous pieces and is not caught by the sibling scan; a `cd` into `~` hidden inside a script; a teammate pasting output into a chat. The real control is procedural. Every match-data computation is a `make private-*` target that writes to `private_out/` and prints only PASS/FAIL. Humans run it, and humans never paste results back to any LLM, including a different AI tool.
-
-**Side effects to know about.**
-- `MTAH_DATA_DIR` (the official env var) contains a forbidden name, so official files mentioning it can only be read with the Read tool, and our own code must not use that name. The private Makefile passes paths via `--data/--out` arguments instead.
-- Repo-wide `grep -r .` and `Glob **` from the repo root are refused. Use subdirectories.
+**Mechanism, Nov 7 – Nov 14.**
+- A PreToolUse hook on every tool (`.claude/hooks/firewall.py`, kept in the repo for the record) blocked, failing closed, any call that referenced the forbidden names, resolved or globbed into a forbidden dir, traversed a directory containing one, decoded or eval'd, ran `make private-*`, or modified the hook settings. `permissions.deny` rules were a second layer.
+- `tests/test_firewall.py` covers it (part of `make test`).
+- Procedure was the real control: every match-data computation was a `make private-*` target that wrote to `private_out/` and printed only PASS/FAIL. Fadel ran them and did not pass the results to Claude (relay protocol, §5).
 
 ---
 
@@ -216,7 +202,7 @@ Detail goes to `private_out/meta.json`. **Decision:** on PASS, the pipeline gets
 
 ## 5. Private-data diagnostics (human-run, PASS/FAIL only)
 
-All live in `Makefile.private` (gitignored), created by Fadel from the template below. The scripts in `private/` take `--data DIR --out DIR` and contain no paths, so Claude can write and unit-test them on synthetic fixtures. Each writes detail to `private_out/<target>/` and prints only PASS/FAIL lines with fixed thresholds. **Run by humans, read by humans, never pasted into any LLM.**
+All live in `Makefile.private` (gitignored), created by Fadel from the template below. The scripts in `private/` take `--data DIR --out DIR` and contain no paths, so Claude can write and unit-test them on synthetic fixtures. Each writes detail to `private_out/<target>/` and prints only PASS/FAIL lines with fixed thresholds. **Run by humans, read by humans, never pasted into any LLM** (until 2026-11-14; see §0).
 
 | target | computes | informs |
 |---|---|---|
@@ -301,7 +287,7 @@ After the freeze: only format or index bug fixes. If any gate fails on Nov 13, s
   5. Handling missing ball and noisy tracking.
   6. Limitations.
   7. Reproduction commands.
-  8. Statement on LLM use: Claude used for code on public/external data only; it never accessed match data.
+  8. Statement on LLM use: Claude used for code on public/external data; from 2026-11-14, with the organisers' permission, it also ran the private targets on the match data (§0).
 
 ---
 

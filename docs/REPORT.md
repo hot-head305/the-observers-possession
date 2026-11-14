@@ -1,6 +1,6 @@
 # The Observers: possession from automatic tracking
 
-More Than a Hack 2027, Phase 1. Draft of 2026-11-10; the numbers are final once frozen on Nov 13.
+More Than a Hack 2027, Phase 1. Final, 2026-11-14. Config frozen at hash `4185e57a0bad`.
 
 ## 1. Approach
 
@@ -120,6 +120,12 @@ reproduces the evaluation in section 5 after `make idsse-download`.
 
 ## 8. Use of AI tools
 
-Code was written with an AI coding assistant, on public and external data only. The assistant had
-no access to the provided match data, by a technical block and by procedure. Every computation on
-the match was run by a team member, whose results were not shared with the assistant.
+- **Code.** Code and documentation were written with an AI coding assistant (Claude, Anthropic).
+- **Until 2026-11-14:** the assistant worked on public and external data only (IDSSE, synthetic data,
+  the official documentation). It had no access to the provided match data, by a technical block and
+  by procedure. A team member ran every computation on the match and did not share the results
+  with the assistant.
+- **From 2026-11-14:** we asked the organisers, and they allowed AI use on the competition data
+  (`docs/LLM-USE.md`). From then on the assistant also ran our checks on the match data: the sanity
+  checks, the reproducibility check and the submission build. This was after the config freeze and
+  the locked test. No model, rule or parameter choice used a result from the match data.

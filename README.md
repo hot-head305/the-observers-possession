@@ -12,4 +12,14 @@ uv sync
 make test
 ```
 
-The final regeneration command and the technical report are added before submission.
+## Reproduce the submission
+
+```
+git clone --recurse-submodules https://github.com/hot-head305/the-observers-possession
+cd the-observers-possession
+uv sync --frozen
+make submission DATA=/path/to/unpacked/bundle OUT=out
+```
+
+This writes `out/The_Observers.csv`, byte-identical across a fresh clone, a fresh venv and
+docker linux/amd64. The technical report is `docs/REPORT.md`.

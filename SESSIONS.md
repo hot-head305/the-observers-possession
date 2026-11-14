@@ -154,3 +154,18 @@
 - `docs/REPORT.md` §5: locked-test result added.
 **Broke:** nothing. 86 pass, 1 opt-in. No typecheck configured. The freeze ran a day late (scheduled for Nov 13); no output-changing work happened in between.
 **Next:** Fadel: `make private-repro` with Docker running; flip the GitHub repo to public; upload the CSV and `docs/REPORT.md` as `The_Observers.md` (deadline Nov 17). After the freeze, only format or index fixes.
+
+## 2026-11-14 — Firewall lifted; sanity + repro on the match data; release check
+
+**Changed:**
+- Policy: the organisers allowed AI use on the competition data, per Fadel; **not in writing** (`docs/LLM-USE.md`). `.claude/settings.json` (hook config) removed from the repo; Fadel's `.claude/settings.json.off` stays untracked.
+- `PLAN.md` §0 rewritten (firewall Nov 7–14, lifted Nov 14); §5 and §7 item 8 adjusted. `docs/REPORT.md` §8 (AI use) and header. `docs/PRIVATE.md` header. `README.md` reproduction commands.
+- Claude ran on the match data:
+  - `make private-sanity`: 5/5 PASS.
+  - `make private-repro`: checkout, fresh clone + venv, docker linux/amd64 all PASS. SHA-256 `2f8b4a618978847d34c14dbefdb13647d922e549f1b5d7d6422bc32e243fc677` = `private_out/submission/The_Observers.csv`.
+  - The README command (`make submission DATA=… OUT=…`) gives the same SHA.
+- Release check: `make check-repo` rc 0; nothing data-like tracked (no CSV, mp4, private_out, local_cache, Makefile.private); `.gitignore` covers them. No model change.
+- Repo flipped to public on Fadel's yes.
+
+**Broke:** nothing. 86 pass, 1 opt-in. No typecheck configured.
+**Next:** Fadel uploads `private_out/submission/The_Observers.csv` (SHA above) and `docs/REPORT.md` as `The_Observers.md` before 2026-11-17.

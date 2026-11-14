@@ -1,7 +1,7 @@
 # Private targets (human-run only)
 
-These read the match data. Claude never runs them, never sees their output, and output is never
-pasted into any AI tool. Each prints PASS/FAIL lines; detail goes to `private_out/<target>/`.
+These read the match data. Until 2026-11-14 Claude never ran them or saw their output. From 2026-11-14,
+with the organisers' permission (`docs/LLM-USE.md`), Claude may run them too (PLAN.md §0). Each prints PASS/FAIL lines; detail goes to `private_out/<target>/`.
 
 ## One-time setup (your own Mac Terminal)
 
