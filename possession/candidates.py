@@ -11,6 +11,7 @@ from dataclasses import asdict, dataclass
 import numpy as np
 
 from . import features as ft
+from . import shape
 from .idsse import ROOT
 
 sys.path.insert(0, os.path.join(ROOT, "vendor", "official", "starter"))
@@ -86,13 +87,13 @@ class Rules:
         return ev
 
     def __call__(self, obs):
-        f = ft.frame_features(obs, self.smooth_f)
+        f = self.features(obs)
         dead = self.dead_mask(f)
         ev = self.evidence(f)
         ev[dead] = -1
         T = len(ev)
         dead_cum = np.cumsum(dead)
-        cur, streak_team, streak_start, streak_n, last = -1, -1, 0, 0, -1
+        cur, streak_team, streak_start, streak_n, last, last_cur = -1, -1, 0, 0, -1, -1
         idx = np.flatnonzero(ev >= 0)
         # Walk evidence frames; a switch is placed at the first evidence frame of the new team's
         # streak (loose ball between carries the previous team, CHALLENGE.md). After a stoppage
@@ -107,19 +108,19 @@ class Rules:
                 restart = t
             last = t
             if cur < 0:
-                cur = k
+                cur, last_cur = k, t
                 switches.append((restart if switches else t, k))
                 continue
             if k == cur:
-                streak_n = 0
+                streak_n, last_cur = 0, t
                 continue
             if k != streak_team or streak_n == 0:
                 streak_team, streak_start, streak_n = k, t, 0
             streak_n += 1
             if streak_n >= self.switch_k:
                 cur = k
-                switches.append((streak_start, k))
-                streak_n = 0
+                switches.append((self._switch_at(last_cur, streak_start), k))
+                streak_n, last_cur = 0, t
         lab = np.full(T, -1, np.int8)
         for i, (t, k) in enumerate(switches):
             end = switches[i + 1][0] if i + 1 < len(switches) else T
@@ -130,6 +131,56 @@ class Rules:
             lab[:] = H
         lab[dead] = D
         return lab
+
+    def features(self, obs):
+        return ft.frame_features(obs, self.smooth_f)
+
+    def _switch_at(self, last_cur, streak_start):
+        """Frame where a switch starts: the new team's first evidence frame."""
+        return streak_start
+
+
+@dataclass(frozen=True)
+class RulesShape(Rules):
+    """#4 plus team-shape evidence (possession/shape.py) on frames where the ball has been
+    unseen for at least shape_min_s: P(H) above shape_thr is H evidence, below 1 - shape_thr A."""
+    shape_w: tuple = ()
+    shape_thr: float = 0.8
+    shape_min_s: float = 1.0
+
+    @property
+    def name(self):
+        return "shape_{}_{}_".format(self.shape_thr, self.shape_min_s) + Rules(**{
+            k: getattr(self, k) for k in Rules.__dataclass_fields__}).name
+
+    def features(self, obs):
+        f = super().features(obs)
+        f["shape_p"] = np.round(shape.predict(self.shape_w, shape.features(obs)), 6)
+        return f
+
+    def evidence(self, f):
+        ev = super().evidence(f)
+        hid = (f["hidden"] > 0) & (f["hidden_run_s"] >= self.shape_min_s)
+        ev[hid & (f["shape_p"] > self.shape_thr)] = H
+        ev[hid & (f["shape_p"] < 1 - self.shape_thr)] = A
+        return ev
+
+
+@dataclass(frozen=True)
+class RulesGap(Rules):
+    """#4 with a turnover across a ball gap placed inside the gap: at last_cur + alpha * (gap),
+    where the gap runs from the holder's last evidence frame to the new team's first. alpha=1 is
+    Rules."""
+    switch_alpha: float = 0.5
+
+    @property
+    def name(self):
+        return "gap_" + super().name
+
+    def _switch_at(self, last_cur, streak_start):
+        if last_cur < 0:
+            return streak_start
+        return last_cur + 1 + int(self.switch_alpha * (streak_start - last_cur - 1))
 
 
 @dataclass(frozen=True)
