@@ -19,6 +19,13 @@ CANDIDATES = {"rules": cd.WithChannel(cd.Rules()), "rules_only": cd.Rules(),
               # v2 (PLAN.md §6b, C): thr/min_s chosen on dev, see experiments/shape_cv.py
               "shape": cd.WithChannel(cd.RulesShape(shape_w=shape.shipped(), shape_thr=0.6,
                                                     shape_min_s=3.0))}
+# v2 review fixes (experiments/review_cv.py; flags chosen on dev by experiments/review_dev.py)
+_FIX = {"ctrl": {"ctrl_rel_v": 2.0, "ctrl_dv": 2.0},
+        "stop": {"inside_m": 5.0, "calm_dead_s": 6.0, "calm_decel": 0.0}}
+_FIX["both"] = {**_FIX["ctrl"], **_FIX["stop"]}
+CANDIDATES.update({"fix_" + k: cd.WithChannel(cd.RulesFix(shape_w=shape.shipped(), shape_thr=0.6,
+                                                            shape_min_s=3.0, **kw))
+                   for k, kw in _FIX.items()})
 
 
 def build(data, n_frames, cand):

@@ -155,15 +155,90 @@ class RulesShape(Rules):
 
     def features(self, obs):
         f = super().features(obs)
-        f["shape_p"] = np.round(shape.predict(self.shape_w, shape.features(obs)), 6)
+        if self.shape_w:
+            f["shape_p"] = np.round(shape.predict(self.shape_w, shape.features(obs)), 6)
         return f
 
     def evidence(self, f):
         ev = super().evidence(f)
+        if not self.shape_w:  # no weights: plain Rules evidence
+            return ev
         hid = (f["hidden"] > 0) & (f["hidden_run_s"] >= self.shape_min_s)
         ev[hid & (f["shape_p"] > self.shape_thr)] = H
         ev[hid & (f["shape_p"] < 1 - self.shape_thr)] = A
         return ev
+
+
+@dataclass(frozen=True)
+class RulesFix(RulesShape):
+    """v2 review fixes (2026-11-15, Fadel's video review of v1), each off at 0.
+
+    ctrl_rel_v   proximity is not control: a nearby player is control evidence only if the ball
+                 moves with him (ball speed relative to the player below ctrl_rel_v m/s) or is
+                 touched by him (the ball's velocity changes by at least ctrl_dv m/s within
+                 +-0.24 s: a stop, a kick or a deflection). A fast pass running past an opponent
+                 gives no evidence. ctrl_dv = 0 disables the touch clause.
+    inside_m     no slowness-only stoppage while the ball is visible and more than inside_m metres
+                 inside the field: there the slow-ball + slow-players rule needs a run of at least
+                 calm_dead_s seconds plus a collective deceleration (mean player speed in the run
+                 at least calm_decel m/s below the 4 s before it). Line crossings and long hidden
+                 balls are unchanged.
+    """
+    ctrl_rel_v: float = 0.0
+    ctrl_dv: float = 3.0
+    inside_m: float = 0.0
+    calm_dead_s: float = 6.0
+    calm_decel: float = 0.5
+
+    @property
+    def name(self):
+        return "fix_{}_{}_{}_{}_{}_".format(self.ctrl_rel_v, self.ctrl_dv, self.inside_m,
+                                            self.calm_dead_s, self.calm_decel) + super().name
+
+    def evidence(self, f):
+        if self.ctrl_rel_v <= 0:
+            return super().evidence(f)
+        dH, dA = f["dH"], f["dA"]
+        dHn, dAn = np.nan_to_num(dH, nan=np.inf), np.nan_to_num(dA, nan=np.inf)
+        touch = self.ctrl_dv > 0 and np.nan_to_num(f["ball_dv"], nan=0.0) >= self.ctrl_dv
+        withH = (np.nan_to_num(f["relH"], nan=np.inf) < self.ctrl_rel_v) | touch
+        withA = (np.nan_to_num(f["relA"], nan=np.inf) < self.ctrl_rel_v) | touch
+        ev = np.full(len(dH), -1, np.int8)
+        ev[(dHn < self.ctrl_r) & (dHn + self.ctrl_margin < dAn) & withH] = H
+        ev[(dAn < self.ctrl_r) & (dAn + self.ctrl_margin < dHn) & withA] = A
+        if self.shape_w:  # keep the team-shape evidence inside long ball gaps
+            hid = (f["hidden"] > 0) & (f["hidden_run_s"] >= self.shape_min_s)
+            ev[hid & (f["shape_p"] > self.shape_thr)] = H
+            ev[hid & (f["shape_p"] < 1 - self.shape_thr)] = A
+        return ev
+
+    def dead_mask(self, f):
+        if self.inside_m <= 0:
+            return super().dead_mask(f)
+        fps = ft.FPS
+        slow_p = np.nan_to_num(f["pspeed_4s"], nan=0) < self.slow_players
+        out = np.nan_to_num(f["out_m"], nan=-99) > self.out_m
+        slow_b = np.nan_to_num(f["bspeed_1s"], nan=99) < self.slow_ball
+        long_hidden = f["hidden_run_s"] >= self.hidden_dead_s
+        near_line = (f["hidden"] > 0) | (np.nan_to_num(f["out_m"], nan=-99) > -self.inside_m)
+        calm = slow_b & slow_p & ~near_line  # slow, visible, well inside the field
+        keep = np.zeros(len(calm), bool)
+        p1 = f["pspeed_1s"]
+        for a, b in _runs(calm):
+            if b - a < self.calm_dead_s * fps:
+                continue
+            before = np.nanmean(p1[max(0, a - 4 * fps):a]) if a > 0 else np.nan
+            during = np.nanmean(p1[a:b])
+            if np.isfinite(before) and np.isfinite(during) and before - during >= self.calm_decel:
+                keep[a:b] = True
+        dead = out | (slow_b & slow_p & near_line) | keep | (long_hidden & slow_p)
+        for a, b in _runs(~dead):
+            if b - a < self.fill_alive_s * fps and a > 0 and b < len(dead):
+                dead[a:b] = True
+        for a, b in _runs(dead):
+            if b - a < self.min_dead_s * fps:
+                dead[a:b] = False
+        return dead
 
 
 @dataclass(frozen=True)

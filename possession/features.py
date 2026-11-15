@@ -56,10 +56,19 @@ def frame_features(obs, smooth=0):
     bspeed = _speed(ball[:, None, :], cap=45)[:, 0]
     out_x = np.maximum(-ball[:, 0], ball[:, 0] - PITCH[0])
     out_y = np.maximum(-ball[:, 1], ball[:, 1] - PITCH[1])
+    # Review fixes (v2): ball motion relative to the nearest player of each team, and whether the
+    # ball is slowing down (speed over the next half second against the previous half second).
+    vb = _velocity(ball[:, None, :])[:, 0]
+    vs = _velocity(slots)
+    relH = _rel_speed(vb, vs, d, team == H)
+    relA = _rel_speed(vb, vs, d, team == A)
+    b_prev, b_next = _half_speeds(ball)
+    dv = _velocity_change(ball)
     return {"hidden": hidden.astype(float), "hidden_run_s": hidden_run_length(hidden) / FPS,
             "dH": dH, "dA": dA, "pspeed_1s": box_mean(pspeed, FPS // 2),
             "pspeed_4s": box_mean(pspeed, 2 * FPS), "bspeed_1s": box_mean(bspeed, FPS // 2),
-            "out_m": np.maximum(out_x, out_y)}
+            "out_m": np.maximum(out_x, out_y), "relH": relH, "relA": relA,
+            "bspeed_prev": b_prev, "bspeed_next": b_next, "ball_dv": dv}
 
 
 def _speed(xy, cap, k=FPS // 2):
@@ -78,3 +87,41 @@ def _team_min(d, mask):
         m = sub.min(1)
     m[allnan] = np.nan
     return m
+
+
+def _velocity(xy, k=FPS // 2):
+    """Velocity vector (m/s) from the displacement over +-k frames; NaN at the edges or gaps."""
+    v = np.full(xy.shape, np.nan, np.float32)
+    v[k:-k] = (xy[2 * k:] - xy[:-2 * k]) * FPS / (2 * k)
+    return v
+
+
+def _rel_speed(vb, vs, d, mask):
+    """Speed of the ball relative to the team's nearest slot (NaN where no slot or ball)."""
+    sub = np.where(mask[None, :], d, np.nan)
+    allnan = np.isnan(sub).all(1)
+    j = np.argmin(np.where(np.isnan(sub), np.inf, sub), 1)
+    vj = vs[np.arange(len(vs)), j]
+    rel = np.linalg.norm(vb - vj, axis=1)
+    rel[allnan] = np.nan
+    return rel
+
+
+def _half_speeds(ball, k=FPS // 2):
+    """Ball speed over the previous k frames and over the next k frames (m/s)."""
+    prev = np.full(len(ball), np.nan, np.float32)
+    nxt = np.full(len(ball), np.nan, np.float32)
+    step = np.linalg.norm(ball[k:] - ball[:-k], axis=1) * FPS / k
+    prev[k:] = step
+    nxt[:-k] = step
+    return prev, nxt
+
+
+def _velocity_change(ball, k=6):
+    """|v_after - v_before| (m/s) of the ball over +-k frames: a kick, stop or deflection at t.
+    k is short (0.24 s) so the change is placed at the touch, not spread over a passing ball."""
+    out = np.full(len(ball), np.nan, np.float32)
+    vb = (ball[k:-k] - ball[:-2 * k]) * FPS / k
+    va = (ball[2 * k:] - ball[k:-k]) * FPS / k
+    out[k:-k] = np.linalg.norm(va - vb, axis=1)
+    return out

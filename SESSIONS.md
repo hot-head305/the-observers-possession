@@ -197,3 +197,40 @@
 **Next:**
 - Main session / Fadel: decide the v2 freeze. Steps: switch the `submission.py` default to `shape`, `make freeze`, locked test #2 (disclosed as a second use).
 - Then REPORT for v2. D (Smart Tagging) not started.
+
+## 2026-11-15 — v2 review fixes (RulesFix): CV vs `shape`, real-match counts; neither promoted
+
+**Changed:** branch `v2-review-fixes` (from main 31d5eb2; main untouched).
+- `possession/features.py`: ball speed relative to each team's nearest slot (`relH`/`relA`), ball velocity change over ±0.24 s (`ball_dv`), half-second ball speeds.
+- `possession/candidates.py`: `RulesShape` is plain `Rules` when `shape_w` is empty; new `RulesFix(RulesShape)`, both flags off by default and output-identical to `shape` then.
+  - (1) `ctrl_rel_v`/`ctrl_dv`: control evidence only if the ball moves with the player or is touched (velocity change), not distance alone.
+  - (2) `inside_m`/`calm_dead_s`/`calm_decel`: no slowness-only stoppage while the ball is visible and > `inside_m` m inside; such runs need ≥ `calm_dead_s` s (and a deceleration ≥ `calm_decel`, which dev set to 0, see below).
+- `experiments/review_dev.py` (dev sweep, J03WPY, fitted profile, 2 seeds), `experiments/review_cv.py` (§6b protocol: CV, 5 seeds, 3 bridges, fitted profile, LOMO shape weights, Holm over 3), `private/review_counts.py` (unsupervised counts on the match).
+- `private/submission.py`: candidates `fix_ctrl`, `fix_stop`, `fix_both`. v1 SHA `2f8b4a61…` and shape SHA `c0fd9e48…` rebuilt unchanged.
+- `tests/test_review_fixes.py`: 96 pass, 1 opt-in. v1 config hash still `4185e57a0bad`.
+- Registry: 4 rows (split cv, profile fitted).
+
+**Results (CV, fitted profile, incumbent v2 `shape` 0.4264):**
+
+| candidate | spell | gain | min-cell gain | p_holm | per-match gain | promote (§2e) | §6b gate |
+|---|---|---|---|---|---|---|---|
+| fix_ctrl (rel 2 m/s, dv 2 m/s) | 0.4280 | +0.0016 | −0.0099 | 0.47 | +.008 +.010 +.001 −.013 | no | no |
+| fix_stop (5 m, 6 s, decel 0) | 0.4313 | +0.0049 | −0.0001 | 0.22 | +.006 +.013 +.007 −.006 | no | no |
+| fix_both | 0.4320 | +0.0056 | −0.0074 | 0.47 | +.012 +.023 +.007 −.019 | no | no |
+
+Dev (J03WPY): every control variant was below `shape` (−0.004 to −0.038; without the touch clause −0.038); the stop fix with the deceleration clause (0.5 m/s) was −0.003 and cost macroF1 (0.809 → 0.782, real fouls dropped), so `calm_decel` was set to 0 on dev. Scope deviation from the brief: the "collective deceleration" clause is in the code but off in the named candidate.
+
+**Real match (unsupervised, no GT; `private/review_counts.py`, D runs < 6 s, last sighting > 5 m inside, same team before and after):**
+
+| file | spells | D runs | fake-stoppage count | H↔A turnovers | spells < 2 s |
+|---|---|---|---|---|---|
+| v1 | 371 | 148 | 19 (QA counted 21 with a looser sighting rule) | 224 | 36 |
+| shape (v2) | 398 | 148 | 19 | 251 | 48 |
+| fix_ctrl | 325 | 148 | 18 | 178 | 21 |
+| fix_stop | 394 | 132 | 4 | 263 | 50 |
+| fix_both | 316 | 132 | 4 | 185 | 21 |
+
+`private-sanity` 5/5 PASS for all three. Outputs in `private_out/submission_fix_*`, `private_out/review_counts_*`, `private_out/sanity_fix_*`; `private_out/submission/` untouched.
+
+**Broke:** nothing failing. No typecheck configured. The IDSSE gate does not confirm Fadel's two video findings: the fixes move the real match in the expected direction (19 → 4 fake stoppages, 73 fewer spells) but on CV they are within noise and J03WOY is negative for all three.
+**Next:** Fadel decides: v1 or `shape` ships as is (the gate says so), or the stop fix is taken on review evidence alone (disclosed in the report as not CV-validated). If taken: switch the default, `make freeze`, locked test #2, repro.
