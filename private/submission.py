@@ -26,6 +26,11 @@ _FIX["both"] = {**_FIX["ctrl"], **_FIX["stop"]}
 CANDIDATES.update({"fix_" + k: cd.WithChannel(cd.RulesFix(shape_w=shape.shipped(), shape_thr=0.6,
                                                             shape_min_s=3.0, **kw))
                    for k, kw in _FIX.items()})
+# v3 `Spec` (possession-spec.md; experiments/spec_cv.py): parameters chosen on dev by
+# experiments/spec_dev.py and spec_calib.py (latency 1 frame, onset lead 25 frames on IDSSE).
+_SPEC = {"pre_dead_s": 2.0, "vanish_out_s": 1.0, "dead_lead_f": 25}
+CANDIDATES["spec"] = cd.WithChannel(cd.RulesSpec(shape_w=shape.shipped(), shape_thr=0.6,
+                                                 shape_min_s=3.0, **_SPEC))
 
 
 def build(data, n_frames, cand):

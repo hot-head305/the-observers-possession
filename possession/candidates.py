@@ -350,3 +350,155 @@ class WithChannel:
                 out[xr == v] = code
             return out
         return lab
+
+
+@dataclass(frozen=True)
+class RulesSpec(RulesFix):
+    """v3 candidate `Spec`: possession-spec.md (2026-11-15) on top of fix_stop + shape.
+
+    R8   control decides WHETHER possession changes, the touch decides WHEN. Control is a streak of
+         ctrl_k evidence frames for the other team (as in Rules). The switch is placed lat_f frames
+         after the first touch of that team's final uninterrupted touch sequence before the control
+         frame (touches from possession/touch.py, looked up to back_s seconds back, R17), never
+         before the touch. Without a touch (ball hidden, soft reception) the streak start is used.
+    R9/10 a touch sequence without later control never flips; proximity alone never flips.
+    R11  a switch placed within pre_dead_s seconds before a stoppage is dropped (the fouled team
+         keeps the ball until D). 0 disables.
+    R5   the restart team is the team of the first touch after the stoppage (within restart_s), else
+         the first team with control evidence.
+    R6   a stoppage ends restart_lat_f frames after the first touch following it (the kick) when
+         restart_lat_f is not None; None keeps the dead mask's own end.
+    R16  a hidden run that begins while the ball heads for a line it would cross within
+         vanish_out_s seconds at its last velocity is a stoppage from its first frame. 0 disables.
+    R2/3 dead_lead_f: a stoppage that starts with the ball inside the field (no line crossing)
+         begins dead_lead_f frames earlier (the onset lag of the dead mask on dev). 0 disables.
+    R15  shape evidence inside hidden gaps (RulesShape), R4 the fix_stop rule (RulesFix) unchanged.
+    """
+    inside_m: float = 5.0
+    calm_dead_s: float = 6.0
+    calm_decel: float = 0.0
+    touch_dv: float = 3.0
+    touch_r: float = 2.5
+    touch_margin: float = 0.0
+    ctrl_k: int = 10
+    lat_f: int = 1
+    back_s: float = 3.0
+    pre_dead_s: float = 0.0
+    restart_s: float = 3.0
+    restart_lat_f: object = None
+    vanish_out_s: float = 0.0
+    dead_lead_f: int = 0
+
+    @property
+    def name(self):
+        return "spec_{}_{}_{}_{}_{}_{}_{}_{}_{}_{}_".format(
+            self.touch_dv, self.touch_r, self.ctrl_k, self.lat_f, self.back_s, self.pre_dead_s,
+            self.restart_s, self.restart_lat_f, self.vanish_out_s, self.dead_lead_f) + super().name
+
+    def touches(self, f):
+        from . import touch
+        return touch.detect(f, dv=self.touch_dv, r=self.touch_r, margin=self.touch_margin)
+
+    def dead_mask(self, f, touches=None):
+        dead = super().dead_mask(f)
+        fps = ft.FPS
+        T = len(dead)
+        if self.vanish_out_s > 0:
+            hidden = f["hidden"] > 0
+            bx, by = f["ball_x"], f["ball_y"]
+            k = 6  # the last visible velocity, from the 0.24 s before the ball vanished
+            for a, b in _runs(hidden):
+                if a <= k or dead[a - 1]:
+                    continue
+                t = a - 1
+                if np.isnan(bx[t]) or np.isnan(bx[t - k]):
+                    continue
+                vx, vy = (bx[t] - bx[t - k]) * fps / k, (by[t] - by[t - k]) * fps / k
+                tau = self.vanish_out_s
+                x1, y1 = bx[t] + vx * tau, by[t] + vy * tau
+                beyond = max(-x1, x1 - ft.PITCH[0], -y1, y1 - ft.PITCH[1])
+                if beyond > self.out_m:
+                    dead[a:b] = True
+        if self.dead_lead_f > 0:
+            outm = np.nan_to_num(f["out_m"], nan=-99)
+            for a, b in _runs(dead):
+                if a > 0 and outm[max(0, a - fps):a + 1].max() <= -2.0:
+                    dead[max(0, a - self.dead_lead_f):a] = True
+        if self.restart_lat_f is not None and touches is not None:
+            from . import touch
+            t, _ = touches
+            for a, b in _runs(dead):
+                if b >= T:
+                    continue
+                i = touch.first_after(t, b, self.restart_s, lo=fps)
+                if i < 0 or t[i] <= a:
+                    continue
+                end = int(min(T, max(a + 1, t[i] + self.restart_lat_f)))
+                if end < b:
+                    dead[end:b] = False
+                else:
+                    dead[b:end] = True
+        for a, b in _runs(dead):
+            if b - a < self.min_dead_s * fps:
+                dead[a:b] = False
+        return dead
+
+    def __call__(self, obs):
+        fps = ft.FPS
+        f = self.features(obs)
+        touches = self.touches(f)
+        dead = self.dead_mask(f, touches)
+        tt, tteam = touches
+        ev = self.evidence(f)
+        ev[dead] = -1
+        T = len(ev)
+        lab = np.full(T, -1, np.int8)
+        prev_team = H
+        for a, b in _runs(~dead):
+            lo, hi = np.searchsorted(tt, a), np.searchsorted(tt, b)
+            st, steam = tt[lo:hi], tteam[lo:hi]
+            idx = a + np.flatnonzero(ev[a:b] >= 0)
+            # R5: the restart team
+            cur = -1
+            early = np.flatnonzero((steam >= 0) & (st < a + self.restart_s * fps))
+            if len(early):
+                cur = int(steam[early[0]])
+            elif len(idx):
+                cur = int(ev[idx[0]])
+            if cur < 0:
+                cur = prev_team
+            switches = [(a, cur)]
+            streak_team, streak_start, streak_n = -1, a, 0
+            for t in idx:
+                k = int(ev[t])
+                if k == cur:
+                    streak_n = 0
+                    continue
+                if k != streak_team or streak_n == 0:
+                    streak_team, streak_start, streak_n = k, t, 0
+                streak_n += 1
+                if streak_n < self.ctrl_k:
+                    continue
+                # control established by k at t: place the switch (R8, R17)
+                t0 = -1
+                j = np.searchsorted(st, t, side="right") - 1
+                while j >= 0 and st[j] > switches[-1][0] and st[j] >= t - self.back_s * fps:
+                    if steam[j] == k:
+                        t0 = int(st[j])
+                    elif steam[j] >= 0:
+                        break
+                    j -= 1
+                s = t0 + self.lat_f if t0 >= 0 else int(streak_start)
+                s = int(min(max(s, switches[-1][0] + 1), b - 1))
+                switches.append((s, k))
+                cur, streak_n = k, 0
+            # R11: a switch right before the stoppage is not a possession
+            if (self.pre_dead_s > 0 and len(switches) > 1 and b < T
+                    and b - switches[-1][0] < self.pre_dead_s * fps):
+                switches.pop()
+            for i, (s, k) in enumerate(switches):
+                e = switches[i + 1][0] if i + 1 < len(switches) else b
+                lab[s:e] = k
+            prev_team = switches[-1][1]
+        lab[dead] = D
+        return lab

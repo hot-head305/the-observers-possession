@@ -68,7 +68,8 @@ def frame_features(obs, smooth=0):
             "dH": dH, "dA": dA, "pspeed_1s": box_mean(pspeed, FPS // 2),
             "pspeed_4s": box_mean(pspeed, 2 * FPS), "bspeed_1s": box_mean(bspeed, FPS // 2),
             "out_m": np.maximum(out_x, out_y), "relH": relH, "relA": relA,
-            "bspeed_prev": b_prev, "bspeed_next": b_next, "ball_dv": dv}
+            "bspeed_prev": b_prev, "bspeed_next": b_next, "ball_dv": dv,
+            "ball_x": ball[:, 0], "ball_y": ball[:, 1], "ball_vx": vb[:, 0], "ball_vy": vb[:, 1]}
 
 
 def _speed(xy, cap, k=FPS // 2):
