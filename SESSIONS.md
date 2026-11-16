@@ -234,3 +234,43 @@ Dev (J03WPY): every control variant was below `shape` (−0.004 to −0.038; wit
 
 **Broke:** nothing failing. No typecheck configured. The IDSSE gate does not confirm Fadel's two video findings: the fixes move the real match in the expected direction (19 → 4 fake stoppages, 73 fewer spells) but on CV they are within noise and J03WOY is negative for all three.
 **Next:** Fadel decides: v1 or `shape` ships as is (the gate says so), or the stop fix is taken on review evidence alone (disclosed in the report as not CV-validated). If taken: switch the default, `make freeze`, locked test #2, repro.
+
+## 2026-11-16 — v3 candidate `Spec` (possession-spec.md): CV +0.031 vs `shape`, promote yes
+
+**Changed:** branch `v3-spec` (from `v2-review-fixes` 3522949; main and `private_out/submission/` untouched).
+- `possession/touch.py`: touches from ball kinematics (local maxima of `ball_dv` ≥ 3 m/s while visible, ≥ 0.24 s apart), assigned to the nearest player's team within 2.5 m, else unassigned.
+- `possession/candidates.py`: `RulesSpec(RulesFix)`, defaults = fix_stop + shape. R8: control (10 evidence frames, as v1) decides whether; the switch is placed `lat_f` frames after the first touch of the gaining team's final uninterrupted touch sequence (look-back 3 s, R17), never before it; no touch found (hidden ball) → streak start. A touch sequence without later control never flips (R9/R10). R11 `pre_dead_s`: a switch < 2 s before a stoppage is dropped. R5: restart team = first touch after D. R16 `vanish_out_s`: hidden run starting with the ball heading over a line within 1 s = D from the last sighting. R2/3 `dead_lead_f`: inside-field stoppages start 25 frames earlier (the measured dead-mask onset lag on dev). R6 `restart_lat_f` built but off (hurt on dev; IDSSE goes live at the kick).
+- `possession/features.py`: ball x/y and velocity exported. `experiments/spec_calib.py` (dev measurements), `experiments/spec_dev.py` (dev sweep), `experiments/spec_cv.py` (§6b gate, Holm over 4). `private/submission.py`: candidate `spec`. `tests/test_spec.py`: 8 tests; `make test` 104 pass, 1 skipped.
+- Registry: 5 rows at 8926185 (split cv, profile fitted, `holm_m` 4; the fix_* rows are re-scores for the 4-candidate Holm budget).
+
+**Calibration on dev J03WPY (fitted profile, 2 seeds, `scratch/out/spec_calib_dev.json`):**
+- Touch detector: recall of DFL pass kicks (ball visible) 0.54 at dv 3 (0.60 at dv 2); offset median +1 frame.
+- Touch-to-switch latency (GT switch − latest touch of the gaining team within 2 s): median **1 frame** at every bridge c ∈ {0.5, 1, 2} s (q25 0, q75 1). IDSSE flips at the touch; the public window (Fadel, 8:26) shows ~15 frames. Not tuned; `lat_f = 1`.
+- No touch of the gaining team within 2 s before ~50 % of GT switches (hidden ball): the shape/streak fallback covers these.
+- Dead-mask onset lag: ball near a line median 0; ball inside the field median +25 frames (q75 48) → `dead_lead_f = 25`.
+- D end: GT live start − first detected touch after D median −6 frames (IDSSE goes live at the kick); the public window shows +17–25. `restart_lat_f` left off.
+- Dev sweep (3 seeds): shape 0.4481, fix_stop 0.4538, Spec default 0.4580, +pre_dead 2 s / vanish 1 s / lead 25 → 0.4810. ctrl_k 15 was higher (0.4845) with 268 spells (under-segmentation risk) → kept 10. ctrl_rel_v hurt.
+
+**CV (§6b: 4 matches, 5 seeds, 3 bridges, fitted profile p_dead 0.3/0.5/0.7, LOMO shape weights; incumbent shape 0.4264):**
+
+| candidate | spell | gain vs shape | min-cell gain | p_holm (m=4) | per-match gain | promote §2e | gate 6b |
+|---|---|---|---|---|---|---|---|
+| Spec | **0.4569** | +0.0305 | +0.0100 | 0.00 | +.021 +.041 +.038 +.021 | **yes** | yes |
+| fix_stop | 0.4313 | +0.0049 | −0.0001 | 0.22 | +.006 +.013 +.007 −.006 | no | no |
+| fix_both | 0.4320 | +0.0056 | −0.0074 | 0.47 | | no | no |
+| fix_ctrl | 0.4280 | +0.0016 | −0.0099 | 0.47 | | no | no |
+
+Spec vs fix_stop: +0.0256, min-cell +0.0101, all 4 matches positive (+.016 +.029 +.031 +.027).
+
+| bridge c | shape | Spec | gain | min-cell | p_holm | per-match | promote §2e | Spec − fix_stop |
+|---|---|---|---|---|---|---|---|---|
+| 0.5 s | 0.3975 | 0.4235 | +0.0260 | +0.0100 | 0.00 | +.019 +.034 +.031 +.021 | no (gain < 0.03) | +0.0216 |
+| 1 s | 0.4224 | 0.4530 | +0.0306 | +0.0123 | 0.00 | +.021 +.042 +.038 +.022 | yes | +0.0259 |
+| 2 s | 0.4593 | 0.4942 | +0.0349 | +0.0138 | 0.00 | +.024 +.049 +.046 +.021 | yes | +0.0293 |
+
+Macro F1 0.8044 (shape 0.7969). Predicted spells 305/match (shape ~330).
+
+**Real match (unsupervised, `private/review_counts.py`):** spells 365 (v1 371, shape 398, fix_stop 394), D runs 135, fake stoppages 4 (shape 19), H↔A turnovers 231 (shape 251), spells < 2 s 36 (shape 48), alive 58.9 min (fix_stop 61.6). `private-sanity` 5/5 PASS. Deterministic: two builds, SHA `3f4c5bb3…`. Outputs `private_out/submission_spec`, `review_counts_submission_spec`, `sanity_spec`.
+
+**Broke:** nothing failing. No typecheck configured. Scope deviations: R12 (keeper) has no explicit rule (Observed carries no keeper flag; a parry followed by control flips under R8, else not). R7 (restart team = team that did not touch last) not used; R5 via the first touch after D. R6 implemented (`restart_lat_f`) but off: IDSSE goes live at the kick, Fadel's public-window read says later; left to IDSSE per the brief. Latency 1 frame per IDSSE, not the ~15 frames seen in the public window (not tuned). Holm over 4 broke harness.promote's 3-candidate assert, so spec_cv.py has its own gate(). The 2026-11-15 fix_* registry rows now have duplicates with `holm_m` 4.
+**Next:** Fadel decides: promote Spec (gate passes on all three bridges by §6b; §2e by two of three) → switch default, `make freeze`, locked test #2, repro, public-window format check. Open: whether to add a public-window-derived switch latency (would be tuning) and the R6 restart convention.
